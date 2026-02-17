@@ -4,6 +4,11 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.CliktError
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.*
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.StandardCharsets
+import java.io.BufferedReader
+import java.io.InterruptedIOException
+import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -26,7 +31,7 @@ class ProxyCli : CliktCommand(
         while (true) {
             val prompt = "proxy> "
             print(prompt)
-            val line = readlnOrNull()?.trim() ?: break
+            val line = safeReadLine()?.trim() ?: break
             if (line.isBlank()) continue
             when (line) {
                 "exit", "quit", "q" -> { echo("До свидания!"); break }
@@ -54,7 +59,7 @@ class ProxyCli : CliktCommand(
         val client = ProxyAPIClient()
         while (true) {
             print("вы> ")
-            val message = readlnOrNull()?.trim() ?: break
+            val message = safeReadLine()?.trim() ?: break
             if (message.isBlank()) continue
             when (message.lowercase()) {
                 "exit", "quit", "q" -> { echo("Выход из диалога."); break }
@@ -93,7 +98,7 @@ class ChatCommand : CliktCommand(
         val client = ProxyAPIClient()
         while (true) {
             print("вы> ")
-            val message = readlnOrNull()?.trim() ?: break
+            val message = safeReadLine()?.trim() ?: break
             if (message.isBlank()) continue
             when (message.lowercase()) {
                 "exit", "quit", "q" -> { echo("Выход из диалога."); break }
@@ -110,10 +115,36 @@ class ChatCommand : CliktCommand(
     }
 }
 
+private val stdinReader by lazy {
+    val decoder = StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPLACE)
+        .onUnmappableCharacter(CodingErrorAction.REPLACE)
+    BufferedReader(InputStreamReader(System.`in`, decoder))
+}
+
+private fun safeReadLine(): String? = try {
+    stdinReader.readLine()
+} catch (e: Exception) {
+    null
+}
+
 private fun chatWithLoader(client: ProxyAPIClient, message: String): String {
     // Новая строка — сохраняем введённый текст, лоадер на следующей
     println()
     val running = AtomicBoolean(true)
+    // Потребляем ввод во время загрузки — запрет ввода до ответа модели
+    val discardDecoder = StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPLACE)
+        .onUnmappableCharacter(CodingErrorAction.REPLACE)
+    val discardThread = thread(isDaemon = true) {
+        try {
+            val reader = BufferedReader(InputStreamReader(System.`in`, discardDecoder))
+            while (running.get()) {
+                reader.readLine()
+            }
+        } catch (_: InterruptedIOException) {}
+        catch (_: Exception) {}
+    }
     val loaderThread = thread {
         val frames = listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
         var i = 0
@@ -128,6 +159,8 @@ private fun chatWithLoader(client: ProxyAPIClient, message: String): String {
         client.chat(message)
     } finally {
         running.set(false)
+        discardThread.interrupt()
+        discardThread.join(200)
         loaderThread.join(150)
         print("\rмодель> ")
         System.out.flush()

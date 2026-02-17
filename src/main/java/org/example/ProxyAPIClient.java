@@ -1,6 +1,12 @@
 package org.example;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -13,16 +19,55 @@ import java.time.Duration;
  */
 public class ProxyAPIClient {
     private static final String BASE_URL = "https://api.proxyapi.ru";
-    private static final String API_KEY = "sk-aGpjyQKhiyXMnm4q61MZ8SVD0bPa5OUj";
-    
+    private static final String CONFIG_FILE = "config.properties";
+    private static final String CONFIG_KEY_API = "API_KEY";
+    private static final String ENV_API_KEY = "PROXY_API_KEY";
+
     private final HttpClient httpClient;
     private final String apiKey;
-    
+
     /**
-     * Конструктор с использованием ключа по умолчанию
+     * Загружает API ключ из config.properties (из текущей директории или classpath)
+     * или из переменной окружения PROXY_API_KEY.
+     */
+    private static String loadApiKeyFromConfig() {
+        String key = System.getenv(ENV_API_KEY);
+        if (key != null && !key.isBlank()) {
+            return key.trim();
+        }
+        Path configPath = Paths.get(CONFIG_FILE);
+        if (Files.isRegularFile(configPath)) {
+            Properties props = new Properties();
+            try (InputStream in = Files.newInputStream(configPath)) {
+                props.load(in);
+                key = props.getProperty(CONFIG_KEY_API);
+                if (key != null && !key.isBlank()) {
+                    return key.trim();
+                }
+            } catch (IOException e) {
+                throw new RuntimeException("Не удалось прочитать " + CONFIG_FILE + ": " + e.getMessage());
+            }
+        }
+        try (InputStream in = ProxyAPIClient.class.getClassLoader().getResourceAsStream(CONFIG_FILE)) {
+            if (in != null) {
+                Properties props = new Properties();
+                props.load(in);
+                key = props.getProperty(CONFIG_KEY_API);
+                if (key != null && !key.isBlank()) {
+                    return key.trim();
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        throw new RuntimeException("API ключ не найден. Задайте " + CONFIG_KEY_API + " в " + CONFIG_FILE +
+                " или переменную окружения " + ENV_API_KEY);
+    }
+
+    /**
+     * Конструктор с использованием ключа из config.properties или PROXY_API_KEY
      */
     public ProxyAPIClient() {
-        this(API_KEY);
+        this(loadApiKeyFromConfig());
     }
     
     /**

@@ -2,6 +2,7 @@ plugins {
     id("java")
     id("application")
     kotlin("jvm") version "1.9.22"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 application {
@@ -27,6 +28,14 @@ dependencies {
 
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("proxy-cli")
+    archiveClassifier.set("")
+    manifest {
+        attributes("Main-Class" to "org.example.ProxyCliKt")
+    }
 }
 
 tasks.test {
