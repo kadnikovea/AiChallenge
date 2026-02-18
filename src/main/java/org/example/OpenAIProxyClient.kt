@@ -3,6 +3,7 @@ package org.example
 import com.google.gson.Gson
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -14,7 +15,13 @@ class OpenAIProxyClient {
     private val apiUrl: String
     private val apiKey: String
     private val gson = Gson()
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(CIO) {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 120_000  // 2 минуты — для сложных запросов (эксперты, двухэтапный)
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 120_000
+        }
+    }
 
     init {
         val resource = this::class.java.classLoader.getResourceAsStream("config.properties")

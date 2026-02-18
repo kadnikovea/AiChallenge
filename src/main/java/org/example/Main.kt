@@ -8,25 +8,101 @@ fun getLastAssistantText(response: OpenAIProxyClient.OpenAIResponse?): String {
 
 fun main() {
     val client = OpenAIProxyClient()
-    val prompt = """
-        Расскажи об атомной энергетике
-        Ответь в виде двух четверостиший (две строфы по четыре строки на русском языке).
+
+    val task = """
+        Персонажи фильма Гая Ричи «Джентльмены» поехали на ферму собирать малину (скажем так). Малина растёт на кустах.
+
+        Когда герои приехали на место, то выяснилось, что ещё надо полить грядки, чтобы кусты продолжали расти. На всё 3 часа, а для грядок надо 100 вёдер воды.
+
+        Как героям распределить дела между собой, чтобы собрать при этом максимум ягод, если:
+
+        Микки Пирсон (Мэтью Макконахи) за час может аккуратно собрать ягоды с 14 кустов или принести 20 вёдер воды;
+        его жена Розалинда (Мишель Докери) за час может собрать ягоды с 15 кустов или принести 15 вёдер воды;
+        подручный Реймонд Смит (Чарли Ханнем) за час может собрать ягоды с 25 кустов или принести 5 вёдер воды;
+        Тренер (Колин Фаррелл) за час может собрать ягоды с 16 кустов или принести 26 вёдер воды. Также он может приструнить подростков и собрать их в спортзале.
+        Если это покажется слишком лёгким, то вот вторая часть задачи — ягоды со скольких кустов получится собрать при оптимальном подходе?
     """.trimIndent()
-    val model = null // или "gpt-5.1-codex-mini"
 
-    // Первый запрос — с доп. параметрами из config.properties
-    val responseWithExtras = client.getResponse(prompt, model, onlyCoreFromConfig = false)
-    val textWithExtras = getLastAssistantText(responseWithExtras)
+    println("=" .repeat(70))
+    println("ЗАДАЧА:")
+    println(task)
+    println("=" .repeat(70))
+    println()
 
-    // Второй запрос — только api_url/api_key/model (без остальных)
-    val responseCoreOnly = client.getResponse(prompt, model, onlyCoreFromConfig = true)
-    val textCoreOnly = getLastAssistantText(responseCoreOnly)
+    // ─────────────────────────────────────────────────────────────────────
+    // СПОСОБ 1: Прямой ответ без дополнительных инструкций
+    // ─────────────────────────────────────────────────────────────────────
+    println(">>> СПОСОБ 1: Прямой ответ (без дополнительных инструкций)")
+    println("-".repeat(70))
 
-    println("Вы>   $prompt\n")
+    val response1 = client.getResponse(task, onlyCoreFromConfig = true)
+    val answer1 = getLastAssistantText(response1)
+    println(answer1)
+    println()
 
-    println("=== Ответ 1: с доп. параметрами из config.properties ===")
-    println("Модель[extras]>   $textWithExtras\n")
+    // ─────────────────────────────────────────────────────────────────────
+    // СПОСОБ 2: Инструкция «решай пошагово»
+    // ─────────────────────────────────────────────────────────────────────
+    println(">>> СПОСОБ 2: Пошаговое решение")
+    println("-".repeat(70))
 
-    println("=== Ответ 2: только api_url/api_key/model (без доп. параметров) ===")
-    println("Модель[core]>   $textCoreOnly")
+    val prompt2 = "$task\n\nРешай пошагово."
+    val response2 = client.getResponse(prompt2, onlyCoreFromConfig = true)
+    val answer2 = getLastAssistantText(response2)
+    println(answer2)
+    println()
+
+    // ─────────────────────────────────────────────────────────────────────
+    // СПОСОБ 3: Двухэтапный — сначала просим составить промпт, затем используем его
+    // ─────────────────────────────────────────────────────────────────────
+    println(">>> СПОСОБ 3: Двухэтапный (модель составляет промпт, затем решает по нему)")
+    println("-".repeat(70))
+
+    val metaPrompt = """
+        Составь оптимальный промпт для решения следующей логической задачи.
+        Промпт должен помочь языковой модели рассуждать чётко и прийти к верному ответу.
+        Верни только текст промпта, без пояснений.
+        
+        Задача:
+        $task
+    """.trimIndent()
+
+    val response3a = client.getResponse(metaPrompt, onlyCoreFromConfig = true)
+    val generatedPrompt = getLastAssistantText(response3a)
+    println("[Сгенерированный промпт]:")
+    println(generatedPrompt)
+    println()
+
+    val response3b = client.getResponse(generatedPrompt, onlyCoreFromConfig = true)
+    val answer3 = getLastAssistantText(response3b)
+    println("[Ответ по сгенерированному промпту]:")
+    println(answer3)
+    println()
+
+    // ─────────────────────────────────────────────────────────────────────
+    // СПОСОБ 4: Группа экспертов
+    // ─────────────────────────────────────────────────────────────────────
+    println(">>> СПОСОБ 4: Группа экспертов (аналитик, математик, критик)")
+    println("-".repeat(70))
+
+    val expertPrompt = """
+        Ты — группа из трёх экспертов, каждый из которых независимо решает логическую задачу:
+        
+        1. **Аналитик** — разбирает условия задачи и строит таблицу истинности.
+        2. **Математик** — формализует задачу через логические уравнения и решает их.
+        3. **Критик** — проверяет решения аналитика и математика, указывает на ошибки и выносит финальный вердикт.
+        
+        Задача:
+        $task
+        
+        Представь ответ каждого эксперта по очереди, а затем общий вывод.
+    """.trimIndent()
+
+    val response4 = client.getResponse(expertPrompt, onlyCoreFromConfig = true)
+    val answer4 = getLastAssistantText(response4)
+    println(answer4)
+    println()
+
+    println("=" .repeat(70))
+    println("Все четыре способа выполнены.")
 }
