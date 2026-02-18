@@ -75,7 +75,7 @@ class OpenAIProxyClient {
             copy("frequency_penalty") { it.toFloatOrNull() }
 
             // stop_sequences — список стоп-строк; при их появлении генерация останавливается
-            copy("stop_sequences") { v -> if (v.isNotBlank()) v.split(",") else null }
+            copy("stop") { v -> if (v.isNotBlank()) v.split(",") else null }
 
             // user — ID конечного пользователя (для логирования/безопасности на стороне провайдера)
             copy("user") { it }
