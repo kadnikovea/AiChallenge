@@ -129,4 +129,86 @@ class OpenAIProxyClient {
             null
         }
     }
+
+    /**
+     * Получить ответ от OpenAI-совместимого ProxyAPI с явными параметрами.
+     * API-ключ и URL берутся из config.properties, остальные параметры передаются напрямую.
+     *
+     * @param question вопрос пользователя
+     * @param model модель (если null — берётся из config)
+     * @param temperature креативность (0.0 - 2.0)
+     * @param maxOutputTokens максимальная длина ответа в токенах
+     * @param topP nucleus sampling
+     * @param presencePenalty штраф за повторение тем
+     * @param frequencyPenalty штраф за повторение слов
+     * @param reasoningEffort уровень рассуждений: "low" / "medium" / "high"
+     * @param stop стоп-последовательности
+     * @param store сохранять ли запрос/ответ на стороне провайдера
+     * @param user ID конечного пользователя
+     * @param metadata произвольные метаданные
+     */
+    fun getResponse(
+        question: String,
+        model: String? = null,
+        temperature: Float? = null,
+        maxOutputTokens: Int? = null,
+        topP: Float? = null,
+        presencePenalty: Float? = null,
+        frequencyPenalty: Float? = null,
+        reasoningEffort: String? = null,
+        stop: List<String>? = null,
+        store: Boolean? = null,
+        user: String? = null,
+        metadata: Map<String, Any>? = null
+    ): OpenAIResponse? = runBlocking {
+        val payload = mutableMapOf<String, Any>(
+            "model" to (model?.takeIf { it.isNotEmpty() }
+                ?: config.getProperty("model", "gpt-4"))
+        )
+
+        // Формируем payload в зависимости от endpoint:
+        if (apiUrl.contains("/responses")) {
+            payload["input"] = listOf(mapOf("role" to "user", "content" to question))
+        } else {
+            payload["messages"] = listOf(mapOf("role" to "user", "content" to question))
+        }
+
+        // Применяем явно переданные параметры
+        temperature?.let { payload["temperature"] = it }
+        maxOutputTokens?.let { payload["max_output_tokens"] = it }
+        topP?.let { payload["top_p"] = it }
+        presencePenalty?.let { payload["presence_penalty"] = it }
+        frequencyPenalty?.let { payload["frequency_penalty"] = it }
+        stop?.let { payload["stop"] = it }
+        store?.let { payload["store"] = it }
+        user?.let { payload["user"] = it }
+        metadata?.let { payload["metadata"] = it }
+        reasoningEffort?.takeIf { it.isNotEmpty() }?.let { effort ->
+            payload["reasoning"] = mapOf("effort" to effort)
+        }
+
+        val jsonPayload = gson.toJson(payload)
+
+        try {
+            val response: HttpResponse = client.post(apiUrl) {
+                contentType(ContentType.Application.Json)
+                setBody(jsonPayload)
+                if (apiKey.isNotEmpty())
+                    header(HttpHeaders.Authorization, "Bearer $apiKey")
+            }
+            val responseStr = response.bodyAsText()
+
+            if (!response.status.isSuccess()) {
+                System.err.println("[OpenAIProxyClient] HTTP error: ${response.status.value} ${response.status.description}")
+                System.err.println("[OpenAIProxyClient] Body: $responseStr")
+                return@runBlocking null
+            }
+
+            gson.fromJson(responseStr, OpenAIResponse::class.java)
+        } catch (e: Exception) {
+            System.err.println("[OpenAIProxyClient] Exception: ${e::class.simpleName}: ${e.message}")
+            e.printStackTrace()
+            null
+        }
+    }
 }

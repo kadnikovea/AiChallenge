@@ -1,108 +1,170 @@
 package org.example
 
+import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 fun getLastAssistantText(response: OpenAIProxyClient.OpenAIResponse?): String {
     val outputs = response?.output.orEmpty()
     val lastAssistant = outputs.lastOrNull { it.role == "assistant" }
-    return lastAssistant?.content?.firstOrNull { it.text != null }?.text ?: ""
+    return lastAssistant?.content?.firstOrNull { it.text != null }?.text ?: "[нет ответа]"
 }
+
+fun currentBranch(): String = try {
+    val proc = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
+        .directory(File("."))
+        .redirectErrorStream(true)
+        .start()
+    proc.inputStream.bufferedReader().readLine()?.trim().orEmpty()
+} catch (_: Exception) {
+    "unknown-branch"
+}
+
+fun sanitizeBranch(branch: String): String =
+    branch.replace(Regex("[^\\w\\-]"), "_").replace("__+", "_").trim('_')
 
 fun main() {
     val client = OpenAIProxyClient()
 
-    val task = """
-        Персонажи фильма Гая Ричи «Джентльмены» поехали на ферму собирать малину (скажем так). Малина растёт на кустах.
+    // Создаём папку results, если её нет
+    val resultsDir = File("results")
+    if (!resultsDir.exists()) {
+        resultsDir.mkdirs()
+    }
 
-        Когда герои приехали на место, то выяснилось, что ещё надо полить грядки, чтобы кусты продолжали расти. На всё 3 часа, а для грядок надо 100 вёдер воды.
+    // Имя ветки и файла
+    val branch = sanitizeBranch(currentBranch())
+    val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
+    val resultFile = File(resultsDir, "${branch}_temperature_experiment_$timestamp.md")
 
-        Как героям распределить дела между собой, чтобы собрать при этом максимум ягод, если:
+    // StringBuilder для накопления Markdown-контента
+    val md = StringBuilder()
 
-        Микки Пирсон (Мэтью Макконахи) за час может аккуратно собрать ягоды с 14 кустов или принести 20 вёдер воды;
-        его жена Розалинда (Мишель Докери) за час может собрать ягоды с 15 кустов или принести 15 вёдер воды;
-        подручный Реймонд Смит (Чарли Ханнем) за час может собрать ягоды с 25 кустов или принести 5 вёдер воды;
-        Тренер (Колин Фаррелл) за час может собрать ягоды с 16 кустов или принести 26 вёдер воды. Также он может приструнить подростков и собрать их в спортзале.
-        Если это покажется слишком лёгким, то вот вторая часть задачи — ягоды со скольких кустов получится собрать при оптимальном подходе?
+    fun printlnMd(text: String = "") {
+        println(text)
+        md.appendLine(text)
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // ЗАГОЛОВОК
+    // ════════════════════════════════════════════════════════════════════════
+
+    printlnMd("# Эксперимент: Влияние temperature на ответы модели")
+    printlnMd()
+    printlnMd("**Дата:** ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))}")
+    printlnMd("**Ветка:** $branch")
+    printlnMd()
+    printlnMd("---")
+    printlnMd()
+
+    // ════════════════════════════════════════════════════════════════════════
+    // ЗАДАЧИ
+    // ════════════════════════════════════════════════════════════════════════
+
+    val tasks = listOf(
+        Triple(
+            "ЛОГИЧЕСКАЯ",
+            "Все кошки — животные. Некоторые животные умеют плавать. " +
+                    "Можно ли утверждать, что некоторые кошки умеют плавать? Объясни.",
+            "логическая задача на проверку правильности силлогизма"
+        ),
+        Triple(
+            "МАТЕМАТИЧЕСКАЯ",
+            "Найди сумму всех натуральных чисел от 1 до 100, кратных 3 или 5. " +
+                    "Покажи ход решения.",
+            "математическая задача на арифметику"
+        ),
+        Triple(
+            "ТВОРЧЕСКАЯ",
+            "Напиши короткое стихотворение (4 строки) о том, " +
+                    "как искусственный интеллект смотрит на закат.",
+            "творческая задача на написание стихотворения"
+        )
+    )
+
+    val temperatures = listOf(
+        0.0f to "точность, предсказуемость",
+        0.7f to "баланс",
+        1.2f to "креативность, разнообразие"
+    )
+
+    // ════════════════════════════════════════════════════════════════════════
+    // ВЫПОЛНЕНИЕ ЗАПРОСОВ
+    // ════════════════════════════════════════════════════════════════════════
+
+    val answersByTask = mutableListOf<Triple<String, String, List<Pair<Float, String>>>>()
+
+    for ((taskIndex, taskInfo) in tasks.withIndex()) {
+        val (taskType, taskQuestion, taskDesc) = taskInfo
+
+        printlnMd("## Задача ${taskIndex + 1}: $taskType")
+        printlnMd()
+        printlnMd("**Описание:** $taskDesc")
+        printlnMd()
+        printlnMd("**Вопрос:** $taskQuestion")
+        printlnMd()
+
+        val answerVariants = mutableListOf<Pair<Float, String>>()
+        for ((temp, tempDesc) in temperatures) {
+            printlnMd("### temperature = $temp ($tempDesc)")
+            printlnMd()
+
+            val response = client.getResponse(
+                question = taskQuestion,
+                temperature = temp,
+                maxOutputTokens = 500
+            )
+            val answer = getLastAssistantText(response)
+            answerVariants.add(temp to answer)
+
+            printlnMd("```")
+            answer.lines().forEach { line ->
+                printlnMd(line)
+            }
+            printlnMd("```")
+            printlnMd()
+        }
+
+        answersByTask += Triple(taskType, taskQuestion, answerVariants)
+        printlnMd("---")
+        printlnMd()
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Итоговый анализ от модели — по результатам эксперимента
+    // ════════════════════════════════════════════════════════════════════════
+
+    val analysisPrompt = """
+        Ниже приведён отчёт в формате Markdown с результатами эксперимента по трём задачам
+        (логическая, математическая, творческая) и трём значениям параметра temperature (0.0, 0.7, 1.2).
+
+        Твоя задача:
+        1) Сравни ответы по точности, креативности и разнообразию для КАЖДОЙ задачи и каждого значения temperature.
+        2) Красиво и понятно оформи вывод на русском в формате Markdown (заголовки, списки, таблицы — по желанию).
+        3) В конце сделай чёткий итог: для каких типов задач лучше всего подходит каждое значение temperature.
+
+        Вот результаты эксперимента (Markdown):
+        ---
+        $md
+        ---
     """.trimIndent()
 
-    println("=" .repeat(70))
-    println("ЗАДАЧА:")
-    println(task)
-    println("=" .repeat(70))
+    val summaryResponse = client.getResponse(
+        question = analysisPrompt,
+        temperature = 0.3f,
+        maxOutputTokens = 800
+    )
+    val summary = getLastAssistantText(summaryResponse)
+
     println()
-
-    // ─────────────────────────────────────────────────────────────────────
-    // СПОСОБ 1: Прямой ответ без дополнительных инструкций
-    // ─────────────────────────────────────────────────────────────────────
-    println(">>> СПОСОБ 1: Прямой ответ (без дополнительных инструкций)")
-    println("-".repeat(70))
-
-    val response1 = client.getResponse(task, onlyCoreFromConfig = true)
-    val answer1 = getLastAssistantText(response1)
-    println(answer1)
+    printlnMd("## Итоговый анализ модели")
+    printlnMd()
+    summary.lines().forEach { printlnMd(it) }
+    printlnMd()
+    printlnMd("*Файл сохранён как `${resultFile.name}`*")
+    resultFile.writeText(md.toString())
     println()
-
-    // ─────────────────────────────────────────────────────────────────────
-    // СПОСОБ 2: Инструкция «решай пошагово»
-    // ─────────────────────────────────────────────────────────────────────
-    println(">>> СПОСОБ 2: Пошаговое решение")
-    println("-".repeat(70))
-
-    val prompt2 = "$task\n\nРешай пошагово."
-    val response2 = client.getResponse(prompt2, onlyCoreFromConfig = true)
-    val answer2 = getLastAssistantText(response2)
-    println(answer2)
-    println()
-
-    // ─────────────────────────────────────────────────────────────────────
-    // СПОСОБ 3: Двухэтапный — сначала просим составить промпт, затем используем его
-    // ─────────────────────────────────────────────────────────────────────
-    println(">>> СПОСОБ 3: Двухэтапный (модель составляет промпт, затем решает по нему)")
-    println("-".repeat(70))
-
-    val metaPrompt = """
-        Составь оптимальный промпт для решения следующей логической задачи.
-        Промпт должен помочь языковой модели рассуждать чётко и прийти к верному ответу.
-        Верни только текст промпта, без пояснений.
-        
-        Задача:
-        $task
-    """.trimIndent()
-
-    val response3a = client.getResponse(metaPrompt, onlyCoreFromConfig = true)
-    val generatedPrompt = getLastAssistantText(response3a)
-    println("[Сгенерированный промпт]:")
-    println(generatedPrompt)
-    println()
-
-    val response3b = client.getResponse(generatedPrompt, onlyCoreFromConfig = true)
-    val answer3 = getLastAssistantText(response3b)
-    println("[Ответ по сгенерированному промпту]:")
-    println(answer3)
-    println()
-
-    // ─────────────────────────────────────────────────────────────────────
-    // СПОСОБ 4: Группа экспертов
-    // ─────────────────────────────────────────────────────────────────────
-    println(">>> СПОСОБ 4: Группа экспертов (аналитик, математик, критик)")
-    println("-".repeat(70))
-
-    val expertPrompt = """
-        Ты — группа из трёх экспертов, каждый из которых независимо решает логическую задачу:
-        
-        1. **Аналитик** — разбирает условия задачи и строит таблицу истинности.
-        2. **Математик** — формализует задачу через логические уравнения и решает их.
-        3. **Критик** — проверяет решения аналитика и математика, указывает на ошибки и выносит финальный вердикт.
-        
-        Задача:
-        $task
-        
-        Представь ответ каждого эксперта по очереди, а затем общий вывод.
-    """.trimIndent()
-
-    val response4 = client.getResponse(expertPrompt, onlyCoreFromConfig = true)
-    val answer4 = getLastAssistantText(response4)
-    println(answer4)
-    println()
-
-    println("=" .repeat(70))
-    println("Все четыре способа выполнены.")
+    println("═".repeat(70))
+    println(" Результат сохранён в: ${resultFile.absolutePath}")
+    println("═".repeat(70))
 }
