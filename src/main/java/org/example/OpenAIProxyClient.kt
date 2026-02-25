@@ -23,18 +23,79 @@ class OpenAIProxyClient {
         }
     }
 
+    // Gemini/Google specific config fields
+    private val googleApiBase: String
+    private val googleApiUrl: String
+    private val googleApiKey: String
+    private val googleModel: String
+
+    // Anthropic/Claude specific config fields
+    private val anthropicApiBase: String
+    private val anthropicModel: String
+    private val anthropicApiKey: String
+
     init {
         val resource = this::class.java.classLoader.getResourceAsStream("config.properties")
             ?: throw IllegalStateException("config.properties not found in resources!")
         config.load(resource)
         apiUrl = config.getProperty("api_url").trim()
         apiKey = config.getProperty("api_key", "").trim()
+
+        googleApiBase = config.getProperty("google_api_base", "https://api.proxyapi.ru/google").trim()
+        googleApiUrl = config.getProperty("google_api_url", "").trim()
+        googleApiKey = config.getProperty("google_api_key", "").trim()
+        googleModel = config.getProperty("google_model", "gemini-2.0-flash-lite").trim()
+
+        anthropicApiBase = config.getProperty("anthropic_api_base", "https://api.proxyapi.ru/anthropic").trim()
+        anthropicModel = config.getProperty("anthropic_model", "claude-3-5-haiku-20241022").trim()
+        anthropicApiKey = config.getProperty("anthropic_api_key", "").trim()
     }
 
     data class Message(val role: String?, val content: String?)
     data class Content(val type: String?, val text: String?)
-    data class OutputEntry(val id: String?, val type: String?, val status: String?, val content: List<Content>?, val role: String?)
-    data class OpenAIResponse(val output: List<OutputEntry>?)
+    data class OutputEntry(
+        val id: String?,
+        val type: String?,
+        val status: String?,
+        val content: List<Content>?,
+        val role: String?
+    )
+
+    // Информация об использованных токенах (если ProxyAPI её возвращает)
+    data class Usage(
+        val input_tokens: Int?,
+        val output_tokens: Int?,
+        val total_tokens: Int?
+    )
+
+    data class OpenAIResponse(
+        val output: List<OutputEntry>?,
+        val usage: Usage?
+    )
+
+    // === Gemini / Google ProxyAPI DTOs ===
+    // Структура упрощена: берём только текст первого кандидата.
+    data class GeminiTextPart(val text: String?)
+    data class GeminiContentBlock(val parts: List<GeminiTextPart>?)
+    data class GeminiCandidate(val content: GeminiContentBlock?)
+    data class GeminiUsageMetadata(val totalTokenCount: Int?)
+    data class GeminiResponse(
+        val candidates: List<GeminiCandidate>?,
+        val usageMetadata: GeminiUsageMetadata?
+    )
+
+    // === Anthropic / Claude ProxyAPI DTOs ===
+    data class ClaudeContentBlock(val type: String?, val text: String?)
+    data class ClaudeUsage(val input_tokens: Int?, val output_tokens: Int?)
+    data class ClaudeResponse(
+        val id: String?,
+        val type: String?,
+        val role: String?,
+        val content: List<ClaudeContentBlock>?,
+        val model: String?,
+        val usage: ClaudeUsage?
+    )
+
 
     /**
      * Получить ответ от OpenAI-совместимого ProxyAPI.
@@ -42,7 +103,7 @@ class OpenAIProxyClient {
      * @param modelOverride - переопределить модель (если нужно).
      * @param onlyCoreFromConfig - если true, брать параметры ТОЛЬКО api_url, api_key, model (в payload не попадет ничего больше из config).
      */
-    fun getResponse(question: String, modelOverride: String? = null, onlyCoreFromConfig: Boolean = false): OpenAIResponse? = runBlocking {
+    suspend fun getResponse(question: String, modelOverride: String? = null, onlyCoreFromConfig: Boolean = false): OpenAIResponse? {
         val payload = mutableMapOf<String, Any>(
             "model" to (modelOverride?.takeIf { it.isNotEmpty() }
                 ?: config.getProperty("model", "gpt-4"))
@@ -106,6 +167,9 @@ class OpenAIProxyClient {
         }
 
         val jsonPayload = gson.toJson(payload)
+        println("[OpenAIProxyClient] → POST $apiUrl")
+        println("[OpenAIProxyClient]   model: ${payload["model"]}")
+        println("[OpenAIProxyClient]   payload: $jsonPayload")
 
         try {
             val response: HttpResponse = client.post(apiUrl) {
@@ -119,15 +183,20 @@ class OpenAIProxyClient {
             if (!response.status.isSuccess()) {
                 System.err.println("[OpenAIProxyClient] HTTP error: ${response.status.value} ${response.status.description}")
                 System.err.println("[OpenAIProxyClient] Body: $responseStr")
-                return@runBlocking null
+                return null
             }
 
-            gson.fromJson(responseStr, OpenAIResponse::class.java)
+            println("[OpenAIProxyClient] ← Response (${response.status.value}):")
+            println(responseStr)
+
+            return gson.fromJson(responseStr, OpenAIResponse::class.java)
         } catch (e: Exception) {
             System.err.println("[OpenAIProxyClient] Exception: ${e::class.simpleName}: ${e.message}")
             e.printStackTrace()
-            null
+            return null
         }
+        // Если вдруг ничего не вернулось ни из try, ни из catch
+        return null
     }
 
     /**
@@ -147,7 +216,8 @@ class OpenAIProxyClient {
      * @param user ID конечного пользователя
      * @param metadata произвольные метаданные
      */
-    fun getResponse(
+
+    suspend fun getResponse(
         question: String,
         model: String? = null,
         temperature: Float? = null,
@@ -160,7 +230,7 @@ class OpenAIProxyClient {
         store: Boolean? = null,
         user: String? = null,
         metadata: Map<String, Any>? = null
-    ): OpenAIResponse? = runBlocking {
+    ): OpenAIResponse? {
         val payload = mutableMapOf<String, Any>(
             "model" to (model?.takeIf { it.isNotEmpty() }
                 ?: config.getProperty("model", "gpt-4"))
@@ -188,6 +258,9 @@ class OpenAIProxyClient {
         }
 
         val jsonPayload = gson.toJson(payload)
+        println("[OpenAIProxyClient] → POST $apiUrl")
+        println("[OpenAIProxyClient]   model: ${payload["model"]}")
+        println("[OpenAIProxyClient]   payload: $jsonPayload")
 
         try {
             val response: HttpResponse = client.post(apiUrl) {
@@ -201,14 +274,131 @@ class OpenAIProxyClient {
             if (!response.status.isSuccess()) {
                 System.err.println("[OpenAIProxyClient] HTTP error: ${response.status.value} ${response.status.description}")
                 System.err.println("[OpenAIProxyClient] Body: $responseStr")
+                return null
+            }
+
+            println("[OpenAIProxyClient] ← Response (${response.status.value}):")
+            println(responseStr)
+
+            return gson.fromJson(responseStr, OpenAIResponse::class.java)
+        } catch (e: Exception) {
+            System.err.println("[OpenAIProxyClient] Exception: ${e::class.simpleName}: ${e.message}")
+            e.printStackTrace()
+            return null
+        }
+    }
+    /**
+     * Запрос к Gemini 2.0 Flash Lite (ProxyAPI Google).
+     *
+     * @param question текст запроса
+     * @param model название модели (если null — берётся из конфига или дефолт)
+     */
+    suspend fun getGeminiResponse(
+        question: String,
+        model: String? = null,
+    ): GeminiResponse? {
+        val effectiveModel = model?.takeIf { it.isNotBlank() } ?: googleModel.ifBlank { "gemini-2.0-flash-lite" }
+        val url = if (googleApiUrl.isNotEmpty()) googleApiUrl else "$googleApiBase/v1beta/models/$effectiveModel:generateContent"
+
+        val payload = mapOf(
+            "contents" to listOf(
+                mapOf(
+                    "parts" to listOf(
+                        mapOf("text" to question)
+                    )
+                )
+            )
+        )
+        val jsonPayload = gson.toJson(payload)
+        val keyToUse = if (googleApiKey.isNotEmpty()) googleApiKey else apiKey
+
+        println("[OpenAIProxyClient] → POST $url")
+        println("[OpenAIProxyClient]   model: $effectiveModel")
+        println("[OpenAIProxyClient]   payload: $jsonPayload")
+
+        try {
+            val response: HttpResponse = client.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(jsonPayload)
+                if (keyToUse.isNotEmpty())
+                    header(HttpHeaders.Authorization, "Bearer $keyToUse")
+            }
+            val responseStr = response.bodyAsText()
+
+            if (!response.status.isSuccess()) {
+                System.err.println("[OpenAIProxyClient] Gemini HTTP error: ${response.status.value} ${response.status.description}")
+                System.err.println("[OpenAIProxyClient] Body: $responseStr")
+                return null
+            }
+
+            println("[OpenAIProxyClient] ← Response (${response.status.value}):")
+            println(responseStr)
+
+            return gson.fromJson(responseStr, GeminiResponse::class.java)
+        } catch (e: Exception) {
+            System.err.println("[OpenAIProxyClient] Gemini Exception: ${e::class.simpleName}: ${e.message}")
+            e.printStackTrace()
+            return null
+        }
+    }
+
+    /**
+     * Запрос к Claude (ProxyAPI Anthropic).
+     *
+     * @param question текст запроса
+     * @param model название модели (если null — берётся из конфига или дефолт)
+     * @param maxTokens максимальная длина ответа в токенах
+     */
+    fun getClaudeResponse(
+        question: String,
+        model: String? = null,
+        maxTokens: Int = 1000
+    ): ClaudeResponse? = runBlocking {
+        val effectiveModel = model?.takeIf { it.isNotBlank() } ?: anthropicModel.ifBlank { "claude-3-5-haiku-20241022" }
+        val url = "$anthropicApiBase/v1/messages"
+
+        val payload = mapOf(
+            "model" to effectiveModel,
+            "max_tokens" to maxTokens,
+            "messages" to listOf(
+                mapOf(
+                    "role" to "user",
+                    "content" to question
+                )
+            )
+        )
+        val jsonPayload = gson.toJson(payload)
+        val keyToUse = if (anthropicApiKey.isNotEmpty()) anthropicApiKey else apiKey
+
+        println("[OpenAIProxyClient] → POST $url")
+        println("[OpenAIProxyClient]   model: $effectiveModel")
+        println("[OpenAIProxyClient]   payload: $jsonPayload")
+
+        try {
+            val response: HttpResponse = client.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(jsonPayload)
+                if (keyToUse.isNotEmpty())
+                    header(HttpHeaders.Authorization, "Bearer $keyToUse")
+                header("anthropic-version", "2023-06-01")
+            }
+            val responseStr = response.bodyAsText()
+
+            if (!response.status.isSuccess()) {
+                System.err.println("[OpenAIProxyClient] Claude HTTP error: ${response.status.value} ${response.status.description}")
+                System.err.println("[OpenAIProxyClient] Body: $responseStr")
                 return@runBlocking null
             }
 
-            gson.fromJson(responseStr, OpenAIResponse::class.java)
+            println("[OpenAIProxyClient] ← Response (${response.status.value}):")
+            println(responseStr)
+
+            gson.fromJson(responseStr, ClaudeResponse::class.java)
         } catch (e: Exception) {
-            System.err.println("[OpenAIProxyClient] Exception: ${e::class.simpleName}: ${e.message}")
+            System.err.println("[OpenAIProxyClient] Claude Exception: ${e::class.simpleName}: ${e.message}")
             e.printStackTrace()
             null
         }
     }
+
 }
