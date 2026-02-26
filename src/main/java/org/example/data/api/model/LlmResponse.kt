@@ -12,7 +12,7 @@ data class LlmResponse(
     val background: Boolean? = null,
     val billing: Billing? = null,
     val completed_at: Long? = null,
-    val error: String? = null,
+    val error: ApiError? = null,
     val frequency_penalty: Double? = null,
     val incomplete_details: String? = null,
     val instructions: String? = null,
@@ -97,4 +97,12 @@ data class InputTokensDetails(
 @Serializable
 data class OutputTokensDetails(
     val reasoning_tokens: Int? = null
+)
+
+@Serializable
+data class ApiError(
+    val message: String? = null,
+    val type: String? = null,
+    val param: String? = null,
+    val code: String? = null
 )

@@ -21,13 +21,14 @@ class OpenAiProvider(
     override suspend fun chat(messages: List<ChatMessage>, model: String): LlmResponse {
         logger.debug { "Sending request to OpenAI API" }
         
-        // Extract the last user message for the input parameter
-        val lastUserMessage = messages.lastOrNull { it.role == Role.USER }?.content 
-            ?: throw IllegalArgumentException("No user message found in the conversation")
+        // Combine all messages into a single input string
+        val fullInput = messages.joinToString("\n\n") { message ->
+            "${message.role.name.lowercase()}: ${message.content}"
+        }
         
         val request = OpenAiProxyRequest(
             model = model,
-            input = lastUserMessage
+            input = fullInput
         )
         
         return try {
