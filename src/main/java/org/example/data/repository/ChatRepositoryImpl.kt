@@ -3,12 +3,13 @@ package org.example.data.repository
 import mu.KotlinLogging
 import org.example.data.api.provider.LlmProvider
 import org.example.data.config.Config
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.ChatSession
 import org.example.domain.model.Role
 import org.example.domain.repository.ChatRepository
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class ChatRepositoryImpl(
     private val provider: LlmProvider,

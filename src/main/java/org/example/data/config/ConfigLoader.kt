@@ -4,7 +4,7 @@ import mu.KotlinLogging
 import java.io.File
 import java.util.Properties
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 object ConfigLoader {
     fun load(filePath: String = "config.properties"): Config {
@@ -28,7 +28,8 @@ object ConfigLoader {
             provider = props.getProperty("llm.provider", "OPENAI"),
             timeout = props.getProperty("llm.timeout", "30000").toLong(),
             persistHistory = props.getProperty("persist.enabled", "false").toBoolean(),
-            historyPath = props.getProperty("persist.path", "./history")
+            historyPath = props.getProperty("persist.path", "./history"),
+            enableLogging = props.getProperty("log.enabled", "true").toBoolean()
         )
     }
 }

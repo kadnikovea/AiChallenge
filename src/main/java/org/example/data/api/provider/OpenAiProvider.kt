@@ -8,10 +8,11 @@ import mu.KotlinLogging
 import org.example.data.api.model.OpenAiProxyRequest
 import org.example.data.api.model.LlmResponse
 import org.example.data.config.Config
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.Role
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class OpenAiProvider(
     private val config: Config,

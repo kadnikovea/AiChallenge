@@ -3,10 +3,11 @@ package org.example.data.persistence
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import mu.KotlinLogging
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatSession
 import java.io.File
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class JsonHistoryStore(private val historyPath: String) : HistoryStore {
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()

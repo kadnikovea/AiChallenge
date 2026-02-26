@@ -9,9 +9,10 @@ import org.example.data.api.model.LlmMessage
 import org.example.data.api.model.LlmRequest
 import org.example.data.api.model.LlmResponse
 import org.example.data.config.Config
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatMessage
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class CustomProvider(
     private val config: Config,

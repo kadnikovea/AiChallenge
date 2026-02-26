@@ -17,6 +17,7 @@ import org.example.data.api.provider.OllamaProvider
 import org.example.data.api.provider.OpenAiProvider
 import org.example.data.config.Config
 import org.example.data.config.ConfigLoader
+import org.example.data.config.LoggerFactory
 import org.example.data.persistence.HistoryStore
 import org.example.data.persistence.InMemoryStore
 import org.example.data.persistence.JsonHistoryStore
@@ -25,7 +26,7 @@ import org.example.domain.repository.ChatRepository
 import org.example.domain.usecase.SendMessageUseCase
 import org.example.domain.usecase.StartSessionUseCase
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class AppContainer {
     // Configuration
@@ -33,9 +34,11 @@ class AppContainer {
     
     // HTTP Client
     val httpClient: HttpClient = HttpClient(CIO) {
-        install(Logging) { // 2. Установка плагина
-            logger = Logger.DEFAULT
-            level = LogLevel.ALL // Уровни: ALL, HEADERS, BODY, INFO, NONE
+        if (config.enableLogging) {
+            install(Logging) { // 2. Установка плагина
+                logger = Logger.DEFAULT
+                level = LogLevel.ALL // Уровни: ALL, HEADERS, BODY, INFO, NONE
+            }
         }
         install(ContentNegotiation) {
             json(Json {

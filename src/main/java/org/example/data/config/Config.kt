@@ -7,5 +7,6 @@ data class Config(
     val provider: String,
     val timeout: Long = 30000,
     val persistHistory: Boolean = false,
-    val historyPath: String = "./history"
+    val historyPath: String = "./history",
+    val enableLogging: Boolean = true
 )

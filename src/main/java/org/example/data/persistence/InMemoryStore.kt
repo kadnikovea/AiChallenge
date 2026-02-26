@@ -1,9 +1,10 @@
 package org.example.data.persistence
 
 import mu.KotlinLogging
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatSession
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class InMemoryStore : HistoryStore {
     private val sessions = mutableMapOf<String, ChatSession>()

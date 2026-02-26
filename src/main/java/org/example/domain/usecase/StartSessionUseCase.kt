@@ -1,9 +1,10 @@
 package org.example.domain.usecase
 
 import mu.KotlinLogging
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatSession
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class StartSessionUseCase {
     operator fun invoke(systemPrompt: String): ChatSession {

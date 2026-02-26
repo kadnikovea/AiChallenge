@@ -7,13 +7,13 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.rendering.TextStyles.bold
 import kotlinx.coroutines.runBlocking
-import mu.KotlinLogging
+import org.example.data.config.LoggerFactory
 import org.example.di.AppContainer
 import org.example.domain.model.ChatSession
 import org.example.ui.component.Helpers
 import kotlin.system.exitProcess
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class LlmCli : CliktCommand(
     name = "llm-cli"

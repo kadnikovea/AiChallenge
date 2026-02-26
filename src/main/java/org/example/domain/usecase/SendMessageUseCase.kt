@@ -1,11 +1,12 @@
 package org.example.domain.usecase
 
 import mu.KotlinLogging
+import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatSession
 import org.example.domain.repository.ChatRepository
 import org.example.data.persistence.HistoryStore
 
-private val logger = KotlinLogging.logger {}
+private val logger = LoggerFactory.getLogger()
 
 class SendMessageUseCase(
     private val repository: ChatRepository,
