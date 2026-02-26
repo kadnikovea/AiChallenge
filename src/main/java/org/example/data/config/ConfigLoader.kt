@@ -3,8 +3,6 @@ package org.example.data.config
 import java.io.File
 import java.util.Properties
 
-private val logger = LoggerFactory.getLogger()
-
 object ConfigLoader {
     fun load(filePath: String = "config.properties"): Config {
         val props = Properties()
@@ -15,16 +13,11 @@ object ConfigLoader {
             ?: throw IllegalStateException("Config file not found: $filePath")
         
         configStream.use { props.load(it) }
-        
-        logger.info { "Configuration loaded from $filePath" }
 
         val historyStoreType = when (props.getProperty("persist.store", "SQLITE").uppercase()) {
             "JSON" -> HistoryStoreType.JSON
             "SQLITE" -> HistoryStoreType.SQLITE
-            else -> {
-                logger.warn { "Unknown persist.store value '${props.getProperty("persist.store")}', defaulting to SQLITE" }
-                HistoryStoreType.SQLITE
-            }
+            else -> HistoryStoreType.SQLITE
         }
 
         val sqliteDbPath = props.getProperty("sqlite.path", "./history.db")

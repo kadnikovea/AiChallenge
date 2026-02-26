@@ -47,21 +47,22 @@ class LlmCli : CliktCommand(
             }
 
             // 3. Спрашиваем пользователя, хочет ли он восстановить сессию
-            val chatSession: ChatSession = if (restoredSession != null && askRestoreSession()) {
-                logger.info { "Restoring previous chat session ${restoredSession.id}" }
-                restoredSession
-            } else {
-                // 4. Запрос системного промпта для новой сессии
-                val systemPrompt = promptSystemPrompt()
+            val (chatSession: ChatSession, showHistoryOnStart: Boolean) =
+                if (restoredSession != null && askRestoreSession()) {
+                    logger.info { "Restoring previous chat session ${restoredSession.id}" }
+                    restoredSession to true
+                } else {
+                    // 4. Запрос системного промпта для новой сессии
+                    val systemPrompt = promptSystemPrompt()
 
-                // 5. Создание новой сессии
-                val newSession = container.startSessionUseCase(systemPrompt)
-                logger.info { "New chat session started" }
-                newSession
-            }
+                    // 5. Создание новой сессии
+                    val newSession = container.startSessionUseCase(systemPrompt)
+                    logger.info { "New chat session started" }
+                    newSession to false
+                }
 
             // 6. Бесконечный цикл чата
-            chatLoop(container, chatSession)
+            chatLoop(container, chatSession, showHistoryOnStart)
 
         } catch (e: Exception) {
             logger.error(e) { "Unexpected error" }
@@ -112,7 +113,11 @@ class LlmCli : CliktCommand(
         }
     }
 
-    private fun chatLoop(container: AppContainer, chatSession: ChatSession) {
+    private fun chatLoop(
+        container: AppContainer,
+        chatSession: ChatSession,
+        showHistoryOnStart: Boolean
+    ) {
         echo()
         echo(cyan(bold("Чат начат")))
         echo()
@@ -122,10 +127,12 @@ class LlmCli : CliktCommand(
             echo()
         }
 
-        while (true) {
-            // Показываем историю сообщений
+        // При восстановлении сессии один раз показываем последние сообщения
+        if (showHistoryOnStart) {
             renderChatHistory(chatSession)
+        }
 
+        while (true) {
             // Запрашиваем сообщение пользователя
             print(cyan(bold("Ваше сообщение: ")))
             val userInput = readlnOrNull()?.trim() ?: ""

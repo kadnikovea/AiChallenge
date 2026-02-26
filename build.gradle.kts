@@ -38,9 +38,8 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     
-    // Logging
+    // Logging (Logback as единственный SLF4J-провайдер)
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
-    implementation("org.slf4j:slf4j-simple:2.0.16")
     
     // Gson for JSON persistence
     implementation("com.google.code.gson:gson:2.10.1")
