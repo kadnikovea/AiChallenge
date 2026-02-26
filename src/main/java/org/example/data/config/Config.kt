@@ -1,5 +1,10 @@
 package org.example.data.config
 
+enum class HistoryStoreType {
+    JSON,
+    SQLITE
+}
+
 data class Config(
     val baseUrl: String,
     val modelName: String,
@@ -8,5 +13,7 @@ data class Config(
     val timeout: Long = 30000,
     val persistHistory: Boolean = false,
     val historyPath: String = "./history",
-    val enableLogging: Boolean = true
+    val enableLogging: Boolean = true,
+    val historyStoreType: HistoryStoreType = HistoryStoreType.SQLITE,
+    val sqliteDbPath: String = "./history.db"
 )

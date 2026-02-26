@@ -10,17 +10,18 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
-import mu.KotlinLogging
 import org.example.data.api.provider.CustomProvider
 import org.example.data.api.provider.LlmProvider
 import org.example.data.api.provider.OllamaProvider
 import org.example.data.api.provider.OpenAiProvider
 import org.example.data.config.Config
 import org.example.data.config.ConfigLoader
+import org.example.data.config.HistoryStoreType
 import org.example.data.config.LoggerFactory
 import org.example.data.persistence.HistoryStore
 import org.example.data.persistence.InMemoryStore
 import org.example.data.persistence.JsonHistoryStore
+import org.example.data.persistence.SqliteHistoryStore
 import org.example.data.repository.ChatRepositoryImpl
 import org.example.domain.repository.ChatRepository
 import org.example.domain.usecase.SendMessageUseCase
@@ -73,12 +74,20 @@ class AppContainer {
     }
     
     // Persistence
-    val historyStore: HistoryStore = if (config.persistHistory) {
-        logger.info { "History persistence enabled at ${config.historyPath}" }
-        JsonHistoryStore(config.historyPath)
-    } else {
+    val historyStore: HistoryStore = if (!config.persistHistory) {
         logger.info { "Using in-memory history store" }
         InMemoryStore()
+    } else {
+        when (config.historyStoreType) {
+            HistoryStoreType.JSON -> {
+                logger.info { "History persistence (JSON) at ${config.historyPath}" }
+                JsonHistoryStore(config.historyPath)
+            }
+            HistoryStoreType.SQLITE -> {
+                logger.info { "History persistence (SQLite) at ${config.sqliteDbPath}" }
+                SqliteHistoryStore(config.sqliteDbPath)
+            }
+        }
     }
     
     // Repositories

@@ -45,6 +45,9 @@ dependencies {
     // Gson for JSON persistence
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // SQLite JDBC driver
+    implementation("org.xerial:sqlite-jdbc:3.46.0.0")
+
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
