@@ -26,6 +26,7 @@ import org.example.data.repository.ChatRepositoryImpl
 import org.example.domain.repository.ChatRepository
 import org.example.domain.usecase.SendMessageUseCase
 import org.example.domain.usecase.StartSessionUseCase
+import org.example.domain.usecase.LoadLastSessionUseCase
 
 private val logger = LoggerFactory.getLogger()
 
@@ -96,6 +97,7 @@ class AppContainer {
     // Use Cases
     val sendMessageUseCase = SendMessageUseCase(chatRepository, historyStore)
     val startSessionUseCase = StartSessionUseCase()
+    val loadLastSessionUseCase = LoadLastSessionUseCase(historyStore)
     
     fun shutdown() {
         logger.info { "Shutting down application..." }

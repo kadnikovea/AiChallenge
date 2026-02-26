@@ -39,14 +39,26 @@ class LlmCli : CliktCommand(
             // 1. Приветственный текст
             renderWelcome(container)
 
-            // 2. Запрос системного промпта
-            val systemPrompt = promptSystemPrompt()
+            // 2. Пытаемся восстановить последнюю сессию через use case
+            val restoredSession: ChatSession? = runBlocking {
+                container.loadLastSessionUseCase()
+            }
 
-            // 3. Создание сессии
-            val chatSession = container.startSessionUseCase(systemPrompt)
-            logger.info { "Chat session started" }
+            // 3. Спрашиваем пользователя, хочет ли он восстановить сессию
+            val chatSession: ChatSession = if (restoredSession != null && askRestoreSession()) {
+                logger.info { "Restoring previous chat session ${restoredSession.id}" }
+                restoredSession
+            } else {
+                // 4. Запрос системного промпта для новой сессии
+                val systemPrompt = promptSystemPrompt()
 
-            // 4. Бесконечный цикл чата
+                // 5. Создание новой сессии
+                val newSession = container.startSessionUseCase(systemPrompt)
+                logger.info { "New chat session started" }
+                newSession
+            }
+
+            // 6. Бесконечный цикл чата
             chatLoop(container, chatSession)
 
         } catch (e: Exception) {
@@ -55,6 +67,17 @@ class LlmCli : CliktCommand(
         } finally {
             container.shutdown()
         }
+    }
+
+    private fun askRestoreSession(): Boolean {
+        echo()
+        echo(white("Найдена сохранённая сессия."))
+        print(cyan("Восстановить последнюю сессию? (да/нет): "))
+
+        val answer = readlnOrNull()?.trim()?.lowercase() ?: ""
+        val yesAnswers = setOf("y", "yes", "д", "да")
+
+        return answer in yesAnswers
     }
 
     private fun renderWelcome(container: AppContainer) {
@@ -112,7 +135,7 @@ class LlmCli : CliktCommand(
             val userInput = readlnOrNull()?.trim() ?: ""
 
             // Проверка на выход
-            if (userInput.lowercase() in listOf("exit", "quit", "bye")) {
+            if (userInput.lowercase() in listOf("exit", "quit", "bye", "q")) {
                 echo()
                 echo(green("👋 До свидания!"))
                 logger.info { "User requested exit" }
