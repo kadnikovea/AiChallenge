@@ -35,13 +35,13 @@ class ChatRepositoryImpl(
         // Call LLM provider
         val response = provider.chat(allMessages, config.modelName)
         
-        // Extract assistant message from ProxyAPI format
+        // Extract assistant message from OpenAI format
         val assistantContent = response.output
-            ?.firstOrNull()
+            ?.firstOrNull { it.role == "assistant" }
             ?.content
-            ?.firstOrNull { it.type == "text" }
+            ?.firstOrNull { it.type == "output_text" }
             ?.text
-            ?: throw IllegalStateException("No response from LLM")
+            ?: throw IllegalStateException("No assistant response found")
         
         val assistantMessage = ChatMessage(
             role = Role.ASSISTANT,
