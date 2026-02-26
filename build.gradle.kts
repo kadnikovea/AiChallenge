@@ -2,6 +2,7 @@ plugins {
     id("java")
     id("application")
     kotlin("jvm") version "1.9.22"
+    kotlin("plugin.serialization") version "1.9.22"
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
@@ -17,15 +18,31 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.ajalt.clikt:clikt:4.3.0")
+    // Kotter for terminal UI
+    implementation("com.varabyte.kotter:kotter:1.1.2")
+    
+    // Ktor Client for HTTP
     implementation("io.ktor:ktor-client-core:2.3.12")
     implementation("io.ktor:ktor-client-cio:2.3.12")
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+    
+    // Kotlinx Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    
+    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("org.slf4j:slf4j-nop:2.0.16")
+    
+    // Logging
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("org.slf4j:slf4j-simple:2.0.16")
+    
+    // Gson for JSON persistence
+    implementation("com.google.code.gson:gson:2.10.1")
 
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -34,10 +51,10 @@ tasks.named<JavaExec>("run") {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("proxy-cli")
+    archiveBaseName.set("llm-cli-agent")
     archiveClassifier.set("")
     manifest {
-        attributes("Main-Class" to "org.example.ProxyCliKt")
+        attributes("Main-Class" to "org.example.MainKt")
     }
 }
 
