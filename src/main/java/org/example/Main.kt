@@ -1,149 +1,208 @@
 package org.example
 
-import com.varabyte.kotter.foundation.input.*
-import com.varabyte.kotter.foundation.liveVarOf
-import com.varabyte.kotter.foundation.session
-import com.varabyte.kotter.foundation.text.*
-import kotlinx.coroutines.delay
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.mordant.rendering.TextColors.*
+import com.github.ajalt.mordant.rendering.TextStyles.bold
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.example.di.AppContainer
 import org.example.domain.model.ChatSession
-import org.example.ui.component.Helpers.renderError
-import org.example.ui.component.Helpers.renderHeader
-import org.example.ui.component.Helpers.renderLoading
-import org.example.ui.component.Helpers.renderMessage
-import org.example.ui.state.AppState
+import org.example.ui.component.Helpers
+import kotlin.system.exitProcess
 
 private val logger = KotlinLogging.logger {}
 
-fun main() {
-    logger.info { "Starting LLM CLI Agent..." }
+class LlmCli : CliktCommand(
+    name = "llm-cli"
+) {
+    private val exitFlag by option("--exit", help = "Выйти из приложения").flag()
 
-    val container = AppContainer()
+    override fun run() {
+        if (exitFlag) {
+            echo(green("Выход из приложения..."))
+            exitProcess(0)
+        }
 
-//     Add shutdown hook
-    Runtime.getRuntime().addShutdownHook(Thread {
-        container.shutdown()
-    })
-    session {
-        var state by liveVarOf(AppState.WELCOME)
-        var chatSession by liveVarOf<ChatSession?>(null)
-        var errorMsg by liveVarOf<String?>(null)
-        var isProcessing by liveVarOf(false)
-        var shouldExit by liveVarOf(false)
+        logger.info { "Starting LLM CLI Agent..." }
 
-        while (!shouldExit) {
-            section {
-                when (state) {
-                    AppState.WELCOME -> {
-                        renderHeader("LLM CLI Agent v1.0")
-                        textLine("Welcome to the LLM CLI Agent!")
-                        textLine("This tool allows you to chat with LLM models via terminal.")
-                        textLine()
-                        cyan { textLine("Provider: ${container.config.provider}") }
-                        cyan { textLine("Model: ${container.config.modelName}") }
-                        textLine()
-                        textLine("Press ENTER to continue...")
-                    }
+        val container = AppContainer()
 
-                    AppState.PROMPT_INPUT -> {
-                        renderHeader("System Prompt Configuration")
-                        textLine("Enter a system prompt to guide the assistant's behavior.")
-                        textLine("Leave blank for default behavior.")
-                        textLine()
-                        yellow { text("System Prompt: ") }
-                    }
+        // Добавляем shutdown hook
+        Runtime.getRuntime().addShutdownHook(Thread {
+            container.shutdown()
+        })
 
-                    AppState.CHATTING -> {
-                        renderHeader("Chat Session")
+        try {
+            // 1. Приветственный текст
+            renderWelcome(container)
 
-                        chatSession?.let { session ->
-                            if (session.systemPrompt.isNotEmpty()) {
-                                yellow { text("System: ") }
-                                textLine(session.systemPrompt)
-                                textLine()
-                            }
+            // 2. Запрос системного промпта
+            val systemPrompt = promptSystemPrompt()
 
-                            // Render chat history
-                            session.messages.forEach { message ->
-                                renderMessage(message)
-                            }
-                        }
+            // 3. Создание сессии
+            val chatSession = container.startSessionUseCase(systemPrompt)
+            logger.info { "Chat session started" }
 
-                        if (isProcessing) {
-                            renderLoading()
-                        } else {
-                            textLine()
-                            cyan { text("You: ") }
-                        }
-                    }
+            // 4. Бесконечный цикл чата
+            chatLoop(container, chatSession)
 
-                    AppState.ERROR -> {
-                        renderHeader("Error")
-                        errorMsg?.let { renderError(it) }
-                        textLine("Press ENTER to continue...")
-                    }
+        } catch (e: Exception) {
+            logger.error(e) { "Unexpected error" }
+            echo(red("❌ Критическая ошибка: ${e.message}"))
+        } finally {
+            container.shutdown()
+        }
+    }
 
-                    else -> {}
-                }
+    private fun renderWelcome(container: AppContainer) {
+        echo()
+        echo(cyan((bold("═".repeat(70)))))
+        echo(cyan(bold("  LLM CLI Agent v1.0")))
+        echo(cyan(bold("═".repeat(70))))
+        echo()
+        echo(white("Добро пожаловать в LLM CLI Agent!"))
+        echo(white("Этот инструмент позволяет общаться с языковыми моделями через терминал."))
+        echo()
+        echo(cyan("Провайдер: ") + yellow(container.config.provider))
+        echo(cyan("Модель: ") + yellow(container.config.modelName))
+        echo()
+        echo(gray("Для выхода введите: exit, quit или bye"))
+        echo(cyan("─".repeat(70)))
+        echo()
+    }
 
-                input()
-            }.runUntilInputEntered {
-                onInputEntered {
-                    val userInput = input.trim()
+    private fun promptSystemPrompt(): String {
+        echo(yellow(bold("Настройка системного промпта")))
+        echo(white("Введите системный промпт для чата (или оставьте пустым для значения по умолчанию):"))
+        echo()
+        print(cyan("Системный промпт: "))
+        
+        val input = readlnOrNull()?.trim() ?: ""
+        
+        return if (input.isEmpty()) {
+            val defaultPrompt = "Ты полезный ассистент."
+            echo(gray("Используется промпт по умолчанию: $defaultPrompt"))
+            defaultPrompt
+        } else {
+            input
+        }
+    }
 
-                    when (state) {
-                        AppState.WELCOME -> {
-                            state = AppState.PROMPT_INPUT
-                        }
+    private fun chatLoop(container: AppContainer, chatSession: ChatSession) {
+        echo()
+        echo(cyan(bold("═".repeat(70))))
+        echo(cyan(bold("  Чат начат")))
+        echo(cyan(bold("═".repeat(70))))
+        echo()
 
-                        AppState.PROMPT_INPUT -> {
-                            val systemPrompt = userInput.ifEmpty { "You are a helpful assistant." }
-                            chatSession = container.startSessionUseCase(systemPrompt)
-                            logger.info { "Chat session started" }
-                            state = AppState.CHATTING
-                        }
+        if (chatSession.systemPrompt.isNotEmpty()) {
+            echo(yellow("Система: ") + gray(chatSession.systemPrompt))
+            echo()
+        }
 
-                        AppState.CHATTING -> {
-                            if (userInput.isEmpty()) {
-                                return@onInputEntered
-                            }
+        while (true) {
+            // Показываем историю сообщений
+            renderChatHistory(chatSession)
 
-                            if (userInput.lowercase() in listOf("exit", "quit", "bye")) {
-                                logger.info { "User requested exit" }
-                                shouldExit = true
-                                container.shutdown()
-                                return@onInputEntered
-                            }
+            // Запрашиваем сообщение пользователя
+            print(cyan(bold("Ваше сообщение: ")))
+            val userInput = readlnOrNull()?.trim() ?: ""
 
-                            isProcessing = true
+            // Проверка на выход
+            if (userInput.lowercase() in listOf("exit", "quit", "bye")) {
+                echo()
+                echo(green("👋 До свидания!"))
+                logger.info { "User requested exit" }
+                break
+            }
 
-                            // Send message synchronously (blocking)
-                            kotlinx.coroutines.runBlocking {
-                                val result = container.sendMessageUseCase(chatSession!!, userInput)
+            // Пропускаем пустые сообщения
+            if (userInput.isEmpty()) {
+                echo(gray("Пожалуйста, введите сообщение."))
+                echo()
+                continue
+            }
 
-                                if (result.isFailure) {
-                                    errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
-                                    state = AppState.ERROR
-                                    logger.error { "Error sending message: $errorMsg" }
-                                } else {
-                                    logger.info { "Message sent successfully" }
-                                }
+            // Показываем лоадер и отправляем сообщение
+            sendMessageWithLoader(container, chatSession, userInput)
+        }
+    }
 
-                                isProcessing = false
-                            }
-                        }
+    private fun renderChatHistory(chatSession: ChatSession) {
+        // Показываем только последние сообщения, чтобы не загромождать экран
+        val recentMessages = chatSession.messages.takeLast(10)
+        
+        if (recentMessages.isNotEmpty()) {
+            echo(gray("─".repeat(70)))
+            recentMessages.forEach { message ->
+                Helpers.renderMessage(message, {echo()})
+            }
+            echo(gray("─".repeat(70)))
+            echo()
+        }
+    }
 
-                        AppState.ERROR -> {
-                            state = AppState.CHATTING
-                            errorMsg = null
-                        }
+    private fun sendMessageWithLoader(
+        container: AppContainer,
+        chatSession: ChatSession,
+        userMessage: String
+    ) {
+        echo()
+        
+        // Запускаем лоадер в отдельном потоке
+        var isLoading = true
+        val loaderThread = Thread {
+            val spinnerFrames = listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+            var frameIndex = 0
+            
+            while (isLoading) {
+                print("\r${yellow("${spinnerFrames[frameIndex]} Ожидание ответа...")}")
+                frameIndex = (frameIndex + 1) % spinnerFrames.size
+                Thread.sleep(100)
+            }
+            print("\r" + " ".repeat(50) + "\r") // Очищаем строку лоадера
+        }
+        
+        loaderThread.start()
 
-                        else -> {}
+        try {
+            // Отправляем сообщение (блокирующий вызов)
+            runBlocking {
+                val result = container.sendMessageUseCase(chatSession, userMessage)
+
+                if (result.isFailure) {
+                    val error = result.exceptionOrNull()?.message ?: "Неизвестная ошибка"
+                    logger.error { "Error sending message: $error" }
+                    isLoading = false
+                    loaderThread.join()
+                    
+                    echo(red("❌ Ошибка: $error"))
+                    echo()
+                } else {
+                    logger.info { "Message sent successfully" }
+                    isLoading = false
+                    loaderThread.join()
+                    
+                    // Показываем последний ответ ассистента
+                    val lastMessage = chatSession.messages.lastOrNull()
+                    if (lastMessage != null) {
+                        Helpers.renderMessage(lastMessage, ::echo)
+                        echo()
                     }
                 }
             }
+        } catch (e: Exception) {
+            isLoading = false
+            loaderThread.join()
+            
+            logger.error(e) { "Error in sendMessageWithLoader" }
+            echo(red("❌ Ошибка: ${e.message}"))
+            echo()
         }
     }
 }
+
+fun main(args: Array<String>) = LlmCli().main(args)

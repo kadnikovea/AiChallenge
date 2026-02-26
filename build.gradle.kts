@@ -18,9 +18,14 @@ repositories {
 }
 
 dependencies {
-    // Kotter for terminal UI
-    implementation("com.varabyte.kotter:kotter:1.1.2")
-    
+    // Clikt for CLI
+    implementation("com.github.ajalt.clikt:clikt:5.0.1")
+    implementation("com.github.ajalt.mordant:mordant:2.7.0")
+
+    implementation("io.ktor:ktor-client-logging:2.3.12")
+    implementation("ch.qos.logback:logback-classic:1.4.11") // для вывода в консоль
+
+
     // Ktor Client for HTTP
     implementation("io.ktor:ktor-client-core:2.3.12")
     implementation("io.ktor:ktor-client-cio:2.3.12")
