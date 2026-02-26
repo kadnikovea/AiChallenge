@@ -99,7 +99,7 @@ class LlmCli : CliktCommand(
         echo()
 
         if (chatSession.systemPrompt.isNotEmpty()) {
-            echo(yellow("Система: ") + gray(chatSession.systemPrompt))
+            echo(yellow("Системный промпт: ") + gray(chatSession.systemPrompt))
             echo()
         }
 
