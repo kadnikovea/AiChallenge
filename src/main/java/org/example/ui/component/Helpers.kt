@@ -1,6 +1,7 @@
 package org.example.ui.component
 
 import com.github.ajalt.mordant.rendering.TextColors.*
+import com.github.ajalt.mordant.rendering.TextStyles.bold
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.Role
 import java.text.SimpleDateFormat
@@ -16,16 +17,21 @@ object Helpers {
      */
     fun renderMessage(message: ChatMessage, echo: (Any?) -> Unit) {
         val timestamp = dateFormat.format(Date(message.timestamp))
-        
+
+        val timePart = gray("[$timestamp] ")
+
         when (message.role) {
             Role.USER -> {
-                echo(cyan("[$timestamp] Вы: ") + white(message.content))
+                val label = brightCyan(bold("Вы"))
+                echo(timePart + label + white(": ${message.content}"))
             }
             Role.ASSISTANT -> {
-                echo(green("[$timestamp] Ассистент: ") + white(message.content))
+                val label = brightGreen(bold("Ассистент"))
+                echo(timePart + label + white(": ${message.content}"))
             }
             Role.SYSTEM -> {
-                echo(yellow("[$timestamp] Система: ") + white(message.content))
+                val label = brightMagenta(bold("Система"))
+                echo(timePart + label + gray(": ${message.content}"))
             }
         }
     }
@@ -35,9 +41,7 @@ object Helpers {
      */
     fun renderHeader(title: String, echo: (Any?) -> Unit) {
         echo("")
-        echo(cyan("═".repeat(70)))
-        echo(cyan("  $title"))
-        echo(cyan("═".repeat(70)))
+        echo(cyan(bold(title)))
         echo("")
     }
     

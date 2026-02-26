@@ -28,6 +28,8 @@ class LlmCli : CliktCommand(
 
         logger.info { "Starting LLM CLI Agent..." }
 
+        System.setProperty("slf4j.internal.verbosity", "WARN")
+
         val container = AppContainer()
 
         // Добавляем shutdown hook
@@ -82,10 +84,7 @@ class LlmCli : CliktCommand(
 
     private fun renderWelcome(container: AppContainer) {
         echo()
-        echo(cyan((bold("═".repeat(70)))))
-        echo(cyan(bold("  LLM CLI Agent v1.0")))
-        echo(cyan(bold("═".repeat(70))))
-        echo()
+        echo(cyan(bold("LLM CLI Agent v1.0")))
         echo(white("Добро пожаловать в LLM CLI Agent!"))
         echo(white("Этот инструмент позволяет общаться с языковыми моделями через терминал."))
         echo()
@@ -93,15 +92,14 @@ class LlmCli : CliktCommand(
         echo(cyan("Модель: ") + yellow(container.config.modelName))
         echo()
         echo(gray("Для выхода введите: exit, quit или bye"))
-        echo(cyan("─".repeat(70)))
         echo()
     }
 
     private fun promptSystemPrompt(): String {
-        echo(yellow(bold("Настройка системного промпта")))
+        echo(brightMagenta(bold("Настройка системного промпта")))
         echo(white("Введите системный промпт для чата (или оставьте пустым для значения по умолчанию):"))
         echo()
-        print(cyan("Системный промпт: "))
+        print(brightMagenta("Системный промпт: "))
         
         val input = readlnOrNull()?.trim() ?: ""
         
@@ -116,13 +114,11 @@ class LlmCli : CliktCommand(
 
     private fun chatLoop(container: AppContainer, chatSession: ChatSession) {
         echo()
-        echo(cyan(bold("═".repeat(70))))
-        echo(cyan(bold("  Чат начат")))
-        echo(cyan(bold("═".repeat(70))))
+        echo(cyan(bold("Чат начат")))
         echo()
 
         if (chatSession.systemPrompt.isNotEmpty()) {
-            echo(yellow("Системный промпт: ") + gray(chatSession.systemPrompt))
+            echo(brightMagenta(bold("Системный промпт: ")) + gray(chatSession.systemPrompt))
             echo()
         }
 
@@ -159,11 +155,12 @@ class LlmCli : CliktCommand(
         val recentMessages = chatSession.messages.takeLast(10)
         
         if (recentMessages.isNotEmpty()) {
-            echo(gray("─".repeat(70)))
+            echo(gray("--- История (последние ${recentMessages.size} сообщений) ---"))
             recentMessages.forEach { message ->
-                Helpers.renderMessage(message, {echo()})
+                Helpers.renderMessage(message, {
+                    echo(it)
+                })
             }
-            echo(gray("─".repeat(70)))
             echo()
         }
     }

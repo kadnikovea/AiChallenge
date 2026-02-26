@@ -13,7 +13,7 @@ data class Config(
     val timeout: Long = 30000,
     val persistHistory: Boolean = false,
     val historyPath: String = "./history",
-    val enableLogging: Boolean = true,
+    val enableLogging: Boolean = false,
     val historyStoreType: HistoryStoreType = HistoryStoreType.SQLITE,
     val sqliteDbPath: String = "./history.db"
 )
