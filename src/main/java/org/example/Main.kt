@@ -152,9 +152,9 @@ class LlmCli : CliktCommand(
                 }
 
                 if (totalTokens != null) {
-                    echo(green("Количество токенов для текущей сессии $totalTokens токенов"))
+                    print("\r${green("Количество токенов для текущей сессии $totalTokens токенов")}")
                 } else {
-                    echo(gray("Нет сохранённых данных о токенах для текущей сессии"))
+                    print("\r${green("Нет сохранённых данных о токенах для текущей сессии")}")
                 }
 
                 echo()
