@@ -145,6 +145,22 @@ class LlmCli : CliktCommand(
                 break
             }
 
+            // Команда для показа суммарного количества токенов за текущую сессию
+            if (userInput.equals("tokens", ignoreCase = true)) {
+                val totalTokens = runBlocking {
+                    container.getSessionUsageUseCase(chatSession.id)
+                }
+
+                if (totalTokens != null) {
+                    echo(green("Количество токенов для текущей сессии $totalTokens токенов"))
+                } else {
+                    echo(gray("Нет сохранённых данных о токенах для текущей сессии"))
+                }
+
+                echo()
+                continue
+            }
+
             // Пропускаем пустые сообщения
             if (userInput.isEmpty()) {
                 echo(gray("Пожалуйста, введите сообщение."))

@@ -27,7 +27,13 @@ object Helpers {
             }
             Role.ASSISTANT -> {
                 val label = brightGreen(bold("Ассистент"))
-                echo(timePart + label + white(": ${message.content}"))
+                val base = timePart + label + white(": ${message.content}")
+
+                val tokensSuffix = message.usage?.totalTokens?.let { total ->
+                    " " + green("${total} tokens")
+                } ?: ""
+
+                echo(base + tokensSuffix)
             }
             Role.SYSTEM -> {
                 val label = brightMagenta(bold("Система"))

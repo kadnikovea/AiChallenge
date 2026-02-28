@@ -7,6 +7,7 @@ import org.example.data.persistence.HistoryStore
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.ChatSession
 import org.example.domain.model.Role
+import org.example.domain.model.TokenUsage
 import org.example.domain.repository.ChatRepository
 
 private val logger = LoggerFactory.getLogger()
@@ -45,9 +46,19 @@ class ChatRepositoryImpl(
             ?.text
             ?: throw IllegalStateException("No assistant response found")
         
+        val apiUsage = response.usage
+        val messageUsage = apiUsage?.let {
+            TokenUsage(
+                inputTokens = it.input_tokens,
+                outputTokens = it.output_tokens,
+                totalTokens = it.total_tokens
+            )
+        }
+
         val assistantMessage = ChatMessage(
             role = Role.ASSISTANT,
-            content = assistantContent
+            content = assistantContent,
+            usage = messageUsage
         )
 
         session.messages.add(assistantMessage)
