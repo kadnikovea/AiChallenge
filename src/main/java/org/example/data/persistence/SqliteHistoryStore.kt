@@ -1,5 +1,8 @@
 package org.example.data.persistence
 
+import org.example.data.api.model.InputTokensDetails
+import org.example.data.api.model.OutputTokensDetails
+import org.example.data.api.model.Usage
 import org.example.data.config.LoggerFactory
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.ChatSession
@@ -7,6 +10,9 @@ import org.example.domain.model.Role
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
+import java.sql.PreparedStatement
+import java.sql.ResultSet
+import java.sql.Types
 
 private val sqliteLogger = LoggerFactory.getLogger()
 
@@ -51,8 +57,39 @@ class SqliteHistoryStore(private val dbPath: String) : HistoryStore {
 
                     stmt.executeUpdate(
                         """
+                        CREATE TABLE IF NOT EXISTS usage (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            session_id TEXT NOT NULL,
+                            message_id TEXT NOT NULL,
+                            input_tokens INTEGER,
+                            cached_tokens INTEGER,
+                            output_tokens INTEGER,
+                            reasoning_tokens INTEGER,
+                            total_tokens INTEGER,
+                            created_at INTEGER NOT NULL,
+                            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                        );
+                        """.trimIndent()
+                    )
+
+                    stmt.executeUpdate(
+                        """
                         CREATE INDEX IF NOT EXISTS idx_messages_session_seq
                         ON messages(session_id, seq);
+                        """.trimIndent()
+                    )
+
+                    stmt.executeUpdate(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_usage_session
+                        ON usage(session_id);
+                        """.trimIndent()
+                    )
+
+                    stmt.executeUpdate(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_usage_message
+                        ON usage(message_id);
                         """.trimIndent()
                     )
                 }
@@ -201,4 +238,136 @@ class SqliteHistoryStore(private val dbPath: String) : HistoryStore {
             emptyList()
         }
     }
+
+    override suspend fun saveUsage(sessionId: String, messageId: String, usage: Usage?) {
+        if (usage == null) return
+        try {
+            getConnection().use { conn ->
+                conn.prepareStatement(
+                    """
+                    INSERT INTO usage (
+                        session_id, message_id,
+                        input_tokens, cached_tokens,
+                        output_tokens, reasoning_tokens,
+                        total_tokens, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, sessionId)
+                    ps.setString(2, messageId)
+                    ps.setNullableInt(3, usage.input_tokens)
+                    ps.setNullableInt(4, usage.input_tokens_details?.cached_tokens)
+                    ps.setNullableInt(5, usage.output_tokens)
+                    ps.setNullableInt(6, usage.output_tokens_details?.reasoning_tokens)
+                    ps.setNullableInt(7, usage.total_tokens)
+                    ps.setLong(8, System.currentTimeMillis())
+                    ps.executeUpdate()
+                }
+            }
+            sqliteLogger.debug { "Usage saved to SQLite for session=$sessionId, message=$messageId" }
+        } catch (e: Exception) {
+            sqliteLogger.error(e) { "Failed to save usage for session=$sessionId, message=$messageId" }
+        }
+    }
+
+    override suspend fun getUsageForSession(sessionId: String): List<UsageRecord> {
+        return try {
+            getConnection().use { conn ->
+                conn.prepareStatement(
+                    """
+                    SELECT session_id, message_id,
+                           input_tokens, cached_tokens,
+                           output_tokens, reasoning_tokens,
+                           total_tokens
+                    FROM usage
+                    WHERE session_id = ?
+                    ORDER BY id ASC
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, sessionId)
+                    ps.executeQuery().use { rs ->
+                        val result = mutableListOf<UsageRecord>()
+                        while (rs.next()) {
+                            val messageId = rs.getString("message_id")
+                            val inputTokens = rs.getNullableInt("input_tokens")
+                            val cachedTokens = rs.getNullableInt("cached_tokens")
+                            val outputTokens = rs.getNullableInt("output_tokens")
+                            val reasoningTokens = rs.getNullableInt("reasoning_tokens")
+                            val totalTokens = rs.getNullableInt("total_tokens")
+
+                            val usage = Usage(
+                                input_tokens = inputTokens,
+                                input_tokens_details =
+                                    if (cachedTokens != null) InputTokensDetails(cachedTokens) else null,
+                                output_tokens = outputTokens,
+                                output_tokens_details =
+                                    if (reasoningTokens != null) OutputTokensDetails(reasoningTokens) else null,
+                                total_tokens = totalTokens
+                            )
+
+                            result.add(UsageRecord(sessionId, messageId, usage))
+                        }
+                        result
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            sqliteLogger.error(e) { "Failed to load usage for session $sessionId from SQLite" }
+            emptyList()
+        }
+    }
+
+    override suspend fun getUsageForMessage(messageId: String): UsageRecord? {
+        return try {
+            getConnection().use { conn ->
+                conn.prepareStatement(
+                    """
+                    SELECT session_id, message_id,
+                           input_tokens, cached_tokens,
+                           output_tokens, reasoning_tokens,
+                           total_tokens
+                    FROM usage
+                    WHERE message_id = ?
+                    LIMIT 1
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, messageId)
+                    ps.executeQuery().use { rs ->
+                        if (!rs.next()) return null
+
+                        val sessionId = rs.getString("session_id")
+                        val inputTokens = rs.getNullableInt("input_tokens")
+                        val cachedTokens = rs.getNullableInt("cached_tokens")
+                        val outputTokens = rs.getNullableInt("output_tokens")
+                        val reasoningTokens = rs.getNullableInt("reasoning_tokens")
+                        val totalTokens = rs.getNullableInt("total_tokens")
+
+                        val usage = Usage(
+                            input_tokens = inputTokens,
+                            input_tokens_details =
+                                if (cachedTokens != null) InputTokensDetails(cachedTokens) else null,
+                            output_tokens = outputTokens,
+                            output_tokens_details =
+                                if (reasoningTokens != null) OutputTokensDetails(reasoningTokens) else null,
+                            total_tokens = totalTokens
+                        )
+
+                        UsageRecord(sessionId, messageId, usage)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            sqliteLogger.error(e) { "Failed to load usage for message $messageId from SQLite" }
+            null
+        }
+    }
+}
+
+private fun PreparedStatement.setNullableInt(index: Int, value: Int?) {
+    if (value != null) setInt(index, value) else setNull(index, Types.INTEGER)
+}
+
+private fun ResultSet.getNullableInt(column: String): Int? {
+    val value = getInt(column)
+    return if (wasNull()) null else value
 }

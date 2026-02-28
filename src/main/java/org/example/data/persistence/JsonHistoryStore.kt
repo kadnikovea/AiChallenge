@@ -2,8 +2,8 @@ package org.example.data.persistence
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import mu.KotlinLogging
 import org.example.data.config.LoggerFactory
+import org.example.data.api.model.Usage
 import org.example.domain.model.ChatSession
 import java.io.File
 
@@ -51,5 +51,21 @@ class JsonHistoryStore(private val historyPath: String) : HistoryStore {
             logger.error(e) { "Failed to list sessions" }
             emptyList()
         }
+    }
+
+    override suspend fun saveUsage(sessionId: String, messageId: String, usage: Usage?) {
+        // Not required for your task; keep behavior explicit
+        if (usage == null) return
+        logger.warn { "Usage persistence not implemented for JsonHistoryStore; ignoring usage for session=$sessionId, message=$messageId" }
+    }
+
+    override suspend fun getUsageForSession(sessionId: String): List<UsageRecord> {
+        logger.warn { "Usage retrieval by session not implemented for JsonHistoryStore; returning empty list for session=$sessionId" }
+        return emptyList()
+    }
+
+    override suspend fun getUsageForMessage(messageId: String): UsageRecord? {
+        logger.warn { "Usage retrieval by message not implemented for JsonHistoryStore; returning null for message=$messageId" }
+        return null
     }
 }

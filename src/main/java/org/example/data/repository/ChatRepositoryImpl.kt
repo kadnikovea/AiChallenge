@@ -1,9 +1,9 @@
 package org.example.data.repository
 
-import mu.KotlinLogging
 import org.example.data.api.provider.LlmProvider
 import org.example.data.config.Config
 import org.example.data.config.LoggerFactory
+import org.example.data.persistence.HistoryStore
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.ChatSession
 import org.example.domain.model.Role
@@ -13,7 +13,8 @@ private val logger = LoggerFactory.getLogger()
 
 class ChatRepositoryImpl(
     private val provider: LlmProvider,
-    private val config: Config
+    private val config: Config,
+    private val historyStore: HistoryStore
 ) : ChatRepository {
     
     override suspend fun sendMessage(
@@ -48,11 +49,18 @@ class ChatRepositoryImpl(
             role = Role.ASSISTANT,
             content = assistantContent
         )
-        
+
         session.messages.add(assistantMessage)
-        
+
+        // Persist per-call token usage if available
+        runCatching {
+            historyStore.saveUsage(session.id, assistantMessage.id, response.usage)
+        }.onFailure {
+            logger.warn(it) { "Failed to save usage for session=${session.id}, message=${assistantMessage.id}" }
+        }
+
         logger.info { "Received response from LLM (${assistantContent.length} chars)" }
-        
+
         assistantMessage
     }
     

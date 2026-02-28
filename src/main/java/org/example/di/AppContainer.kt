@@ -92,7 +92,7 @@ class AppContainer {
     }
     
     // Repositories
-    val chatRepository: ChatRepository = ChatRepositoryImpl(llmProvider, config)
+    val chatRepository: ChatRepository = ChatRepositoryImpl(llmProvider, config, historyStore)
     
     // Use Cases
     val sendMessageUseCase = SendMessageUseCase(chatRepository, historyStore)
