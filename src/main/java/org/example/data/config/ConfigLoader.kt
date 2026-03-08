@@ -22,6 +22,10 @@ object ConfigLoader {
 
         val sqliteDbPath = props.getProperty("sqlite.path", "./history.db")
 
+        val maxContextMessages = props.getProperty("context.maxMessages", "30").toInt()
+        val summaryUpdateStep = props.getProperty("context.summaryUpdateStep", "10").toInt()
+        val enableContextSummarization = props.getProperty("context.enableSummarization", "true").toBoolean()
+
         return Config(
             baseUrl = props.getProperty("llm.baseUrl")
                 ?: throw IllegalStateException("llm.baseUrl is required"),
@@ -34,7 +38,10 @@ object ConfigLoader {
             historyPath = props.getProperty("persist.path", "./history"),
             enableLogging = props.getProperty("log.enabled", "true").toBoolean(),
             historyStoreType = historyStoreType,
-            sqliteDbPath = sqliteDbPath
+            sqliteDbPath = sqliteDbPath,
+            maxContextMessages = maxContextMessages,
+            summaryUpdateStep = summaryUpdateStep,
+            enableContextSummarization = enableContextSummarization
         )
     }
 }

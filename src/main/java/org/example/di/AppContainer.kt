@@ -18,10 +18,18 @@ import org.example.data.config.Config
 import org.example.data.config.ConfigLoader
 import org.example.data.config.HistoryStoreType
 import org.example.data.config.LoggerFactory
+import org.example.data.context.ContextWindowManager
+import org.example.data.context.ContextWindowManagerImpl
+import org.example.data.context.ConversationSummarizer
+import org.example.data.context.ConversationSummarizerImpl
 import org.example.data.persistence.HistoryStore
 import org.example.data.persistence.InMemoryStore
 import org.example.data.persistence.JsonHistoryStore
 import org.example.data.persistence.SqliteHistoryStore
+import org.example.data.persistence.ConversationSummaryStore
+import org.example.data.persistence.InMemoryConversationSummaryStore
+import org.example.data.persistence.JsonConversationSummaryStore
+import org.example.data.persistence.SqliteConversationSummaryStore
 import org.example.data.repository.ChatRepositoryImpl
 import org.example.domain.repository.ChatRepository
 import org.example.domain.usecase.SendMessageUseCase
@@ -75,7 +83,7 @@ class AppContainer {
         }
     }
     
-    // Persistence
+    // Persistence for full history
     val historyStore: HistoryStore = if (!config.persistHistory) {
         logger.info { "Using in-memory history store" }
         InMemoryStore()
@@ -91,9 +99,35 @@ class AppContainer {
             }
         }
     }
+
+    // Persistence for conversation summaries (stored separately from full history)
+    val conversationSummaryStore: ConversationSummaryStore = if (!config.persistHistory) {
+        logger.info { "Using in-memory conversation summary store" }
+        InMemoryConversationSummaryStore()
+    } else {
+        when (config.historyStoreType) {
+            HistoryStoreType.JSON -> {
+                logger.info { "Summary persistence (JSON) at ${config.historyPath}" }
+                JsonConversationSummaryStore(config.historyPath)
+            }
+            HistoryStoreType.SQLITE -> {
+                logger.info { "Summary persistence (SQLite) at ${config.sqliteDbPath}" }
+                SqliteConversationSummaryStore(config.sqliteDbPath)
+            }
+        }
+    }
     
+    // Context management
+    val conversationSummarizer: ConversationSummarizer = ConversationSummarizerImpl(llmProvider, config)
+
+    val contextWindowManager: ContextWindowManager = ContextWindowManagerImpl(
+        config = config,
+        summaryStore = conversationSummaryStore,
+        summarizer = conversationSummarizer
+    )
+
     // Repositories
-    val chatRepository: ChatRepository = ChatRepositoryImpl(llmProvider, config, historyStore)
+    val chatRepository: ChatRepository = ChatRepositoryImpl(llmProvider, config, historyStore, contextWindowManager)
     
     // Use Cases
     val sendMessageUseCase = SendMessageUseCase(chatRepository, historyStore)

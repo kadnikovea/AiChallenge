@@ -3,6 +3,7 @@ package org.example.data.repository
 import org.example.data.api.provider.LlmProvider
 import org.example.data.config.Config
 import org.example.data.config.LoggerFactory
+import org.example.data.context.ContextWindowManager
 import org.example.data.persistence.HistoryStore
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.ChatSession
@@ -15,7 +16,8 @@ private val logger = LoggerFactory.getLogger()
 class ChatRepositoryImpl(
     private val provider: LlmProvider,
     private val config: Config,
-    private val historyStore: HistoryStore
+    private val historyStore: HistoryStore,
+    private val contextWindowManager: ContextWindowManager
 ) : ChatRepository {
     
     override suspend fun sendMessage(
@@ -25,16 +27,12 @@ class ChatRepositoryImpl(
         // Add user message to session
         val userMsg = ChatMessage(role = Role.USER, content = userMessage)
         session.messages.add(userMsg)
-        
-        // Prepare messages including system prompt
-        val allMessages = mutableListOf<ChatMessage>()
-        if (session.systemPrompt.isNotEmpty()) {
-            allMessages.add(ChatMessage(role = Role.SYSTEM, content = session.systemPrompt))
-        }
-        allMessages.addAll(session.messages)
-        
-        logger.debug { "Sending ${allMessages.size} messages to LLM" }
-        
+
+        // Построить контекст для LLM с учётом последних N сообщений и summary ранней части диалога
+        val allMessages = contextWindowManager.buildContextMessages(session)
+
+        logger.debug { "Sending ${allMessages.size} messages to LLM (session=${session.id})" }
+
         // Call LLM provider
         val response = provider.chat(allMessages, config.modelName)
         

@@ -15,5 +15,17 @@ data class Config(
     val historyPath: String = "./history",
     val enableLogging: Boolean = false,
     val historyStoreType: HistoryStoreType = HistoryStoreType.SQLITE,
-    val sqliteDbPath: String = "./history.db"
+    val sqliteDbPath: String = "./history.db",
+
+    /** Максимальное количество последних сообщений, которые отправляются в LLM "как есть". */
+    val maxContextMessages: Int = 5,
+
+    /**
+     * Как часто обновлять summary: каждые N новых сообщений, попадающих в "старую" часть диалога.
+     * Например, при значении 10 summary будет пересчитываться примерно каждые 10 новых сообщений.
+     */
+    val summaryUpdateStep: Int = 3,
+
+    /** Включить/выключить механику контекстной суммаризации. */
+    val enableContextSummarization: Boolean = true
 )
