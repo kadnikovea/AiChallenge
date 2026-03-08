@@ -18,6 +18,7 @@ import org.example.data.config.Config
 import org.example.data.config.ConfigLoader
 import org.example.data.config.HistoryStoreType
 import org.example.data.config.LoggerFactory
+import org.example.data.config.TextConfigFileReader
 import org.example.data.context.ContextWindowManager
 import org.example.data.context.ContextWindowManagerImpl
 import org.example.data.context.ConversationSummarizer
@@ -31,6 +32,7 @@ import org.example.data.persistence.InMemoryConversationSummaryStore
 import org.example.data.persistence.JsonConversationSummaryStore
 import org.example.data.persistence.SqliteConversationSummaryStore
 import org.example.data.repository.ChatRepositoryImpl
+import org.example.data.promptBuilder.PromptBuilder
 import org.example.domain.repository.ChatRepository
 import org.example.domain.usecase.SendMessageUseCase
 import org.example.domain.usecase.StartSessionUseCase
@@ -42,6 +44,33 @@ private val logger = LoggerFactory.getLogger()
 class AppContainer {
     // Configuration
     val config: Config = ConfigLoader.load()
+
+    // Text client config reader (e.g., client-config/style.txt)
+    val textConfigFileReader: TextConfigFileReader = TextConfigFileReader()
+
+    // Convenience property for client style configuration
+    val clientStyleConfig: String by lazy {
+        textConfigFileReader.read("style.txt")
+    }
+
+    // Convenience property for global architectural constraints configuration
+    val clientConstraintsConfig: String by lazy {
+        textConfigFileReader.read("constraints.txt")
+    }
+
+    // Convenience property for project / assistant context configuration
+    val clientContextConfig: String by lazy {
+        textConfigFileReader.read("context.txt")
+    }
+
+    // Prompt builder that merges client configs into a single profile system prompt
+    val promptBuilder: PromptBuilder by lazy {
+        PromptBuilder(
+            contextConfig = clientContextConfig,
+            constraintsConfig = clientConstraintsConfig,
+            styleConfig = clientStyleConfig,
+        )
+    }
     
     // HTTP Client
     val httpClient: HttpClient = HttpClient(CIO) {
@@ -127,7 +156,13 @@ class AppContainer {
     )
 
     // Repositories
-    val chatRepository: ChatRepository = ChatRepositoryImpl(llmProvider, config, historyStore, contextWindowManager)
+    val chatRepository: ChatRepository = ChatRepositoryImpl(
+        provider = llmProvider,
+        config = config,
+        historyStore = historyStore,
+        contextWindowManager = contextWindowManager,
+        promptBuilder = promptBuilder,
+    )
     
     // Use Cases
     val sendMessageUseCase = SendMessageUseCase(chatRepository, historyStore)

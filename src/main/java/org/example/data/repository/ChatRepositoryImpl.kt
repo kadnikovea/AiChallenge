@@ -4,6 +4,7 @@ import org.example.data.api.provider.LlmProvider
 import org.example.data.config.Config
 import org.example.data.config.LoggerFactory
 import org.example.data.context.ContextWindowManager
+import org.example.data.promptBuilder.PromptBuilder
 import org.example.data.persistence.HistoryStore
 import org.example.domain.model.ChatMessage
 import org.example.domain.model.ChatSession
@@ -17,7 +18,8 @@ class ChatRepositoryImpl(
     private val provider: LlmProvider,
     private val config: Config,
     private val historyStore: HistoryStore,
-    private val contextWindowManager: ContextWindowManager
+    private val contextWindowManager: ContextWindowManager,
+    private val promptBuilder: PromptBuilder,
 ) : ChatRepository {
     
     override suspend fun sendMessage(
@@ -29,7 +31,17 @@ class ChatRepositoryImpl(
         session.messages.add(userMsg)
 
         // Построить контекст для LLM с учётом последних N сообщений и summary ранней части диалога
-        val allMessages = contextWindowManager.buildContextMessages(session)
+        val baseMessages = contextWindowManager.buildContextMessages(session)
+
+        // Построить профильное system-сообщение на основе client-config (context / constraints / style)
+        val profileText = promptBuilder.buildProfileInstruction()
+        val profileMessage = ChatMessage(role = Role.SYSTEM, content = profileText)
+
+        // Итоговый список сообщений: сначала профиль, затем системный промпт с summary и история
+        val allMessages = mutableListOf<ChatMessage>().apply {
+            add(profileMessage)
+            addAll(baseMessages)
+        }
 
         logger.debug { "Sending ${allMessages.size} messages to LLM (session=${session.id})" }
 
